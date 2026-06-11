@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>인구 변화와 도시 문제 - 교사 대시보드 및 AI 첨삭관</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+      background-attachment: fixed;
+    }
+  </style>
+</head>
+<body class="min-h-screen font-sans text-slate-800 antialiased">
+
+  <!-- Main Container -->
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    
+    <!-- LOGIN VIEW (Standard Password Verification: 5678) -->
+    <section id="login-container" class="max-w-md mx-auto mt-20 animate-in zoom-in duration-300">
+      <div class="bg-white rounded-3xl shadow-xl border border-slate-200/60 p-8 text-center">
+        <div class="w-16 h-16 bg-slate-800 text-white rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">🔑</div>
+        <h2 class="text-2xl font-black text-slate-800 mb-2">교사 인증 관리자실</h2>
+        <p class="text-sm text-slate-400 mb-6">학생 데이터 조회 및 평가를 위해 암호를 입력하세요.</p>
+        <form id="login-form" class="space-y-4">
+          <input 
+            id="password-input" type="password" placeholder="비밀번호" required
+            class="w-full p-4 text-center text-2xl tracking-widest bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-300 outline-none font-bold"
+          />
+          <button type="submit" class="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl transition-colors">
+            인증 및 입장
+          </button>
+        </form>
+        <p id="error-msg" class="text-xs text-red-500 font-semibold mt-3 hidden">✕ 잘못된 비밀번호입니다.</p>
+      </div>
+    </section>
+
+    <!-- DASHBOARD VIEW -->
+    <section id="dashboard-container" class="hidden space-y-6 animate-in fade-in duration-500">
+      
+      <!-- Top Title Bar -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+        <div>
+          <h1 class="text-3xl font-black text-slate-800">학급 통합 통계 대시보드</h1>
+          <p class="text-indigo-600/80 font-bold text-sm mt-0.5">실시간 학생 제출물 분석 및 AI 연동 개별화 피드백 시스템</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <!-- GAS config toggle -->
+          <button onclick="toggleGasConfig()" class="flex items-center space-x-1.5 px-4 py-2.5 bg-white text-slate-700 hover:bg-slate-50 font-bold rounded-xl transition-colors border border-slate-200">
+            ⚙️ GAS 설정
+          </button>
+          <button onclick="exportToCSV()" class="flex items-center space-x-1.5 px-4 py-2.5 bg-green-600 text-white hover:bg-green-700 font-bold rounded-xl transition-all shadow-sm">
+            💾 CSV 전체 다운로드
+          </button>
+        </div>
+      </div>
+
+      <!-- GAS Setup Web Modal/Notice -->
+      <div id="gas-config-box" class="hidden bg-slate-800 text-slate-100 p-6 rounded-3xl border border-slate-700 shadow-xl space-y-4">
+        <div class="flex justify-between items-start">
+          <h3 class="text-lg font-bold text-indigo-400">🔗 Google Apps Script(GAS) Web App 설정 가이드</h3>
+          <button onclick="toggleGasConfig()" class="text-slate-400 hover:text-white font-bold">닫기</button>
+        </div>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          클라이언트 보안 문제로 인해 Gemini API는 웹 브라우저에서 직접 키를 담아 호출할 수 없습니다. 아래의 구글 웹앱 URL 필드에 등록한 GAS 배포 주소를 입력하십시오.
+        </p>
+        <div>
+          <label class="block text-xs font-bold text-indigo-300 mb-1.5">구글 앱스 스크립트 웹앱 주소 (GAS URL)</label>
+          <input 
+            id="gas-url-input" type="text" placeholder="https://script.google.com/macros/s/..."
+            class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 font-mono text-xs focus:ring-1 focus:ring-indigo-400 outline-none"
+          />
+        </div>
+        <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-700 text-xs text-slate-400 overflow-x-auto">
+          <p class="font-bold text-indigo-400 mb-1">💡 구글 드라이브 > 스크립트에 배포할 기본 코드:</p>
+          <pre><code>function doPost(e) {
+  var data = JSON.parse(e.postData.contents);
+  var promptText = data.prompt;
+  var apiKey = "YOUR_GEMINI_API_KEY_HERE";
+  var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=" + apiKey;
+  
+  var payload = {
+    contents: [{ parts: [{ text: promptText }] }]
+  };
+  
+  var options = {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify(payload)
+  };
+  
+  try {
+    var response = UrlFetchApp.fetch(url, options);
+    var json = JSON.parse(response.getContentText());
+    var text = json.candidates[0].content.parts[0].text;
+    return ContentService.createTextOutput(JSON.stringify({ text: text }))
+                         .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.toString() }))
+                         .setMimeType(ContentService.MimeType.JSON);
+  }
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- Quick Stats Card Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Progress Card -->
+        <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 flex flex-col justify-between">
+          <div>
+            <span class="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1">실시간 학급 참여도</span>
+            <h3 class="text-lg font-bold text-slate-600">누적 탐구 완료 학생</h3>
+          </div>
+          <div class="my-4 flex items-baseline space-x-2">
+            <span id="submitted-count" class="text-5xl font-black text-indigo-600">0</span>
+            <span class="text-xl text-slate-400 font-medium">/ 25명 (목표 학급 수)</span>
+          </div>
+          <div class="w-full bg-indigo-50 h-3 rounded-full overflow-hidden">
+            <div id="progress-bar" class="bg-indigo-600 h-full rounded-full transition-all duration-1000" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Grade Chart Card -->
+        <div class="md:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
+          <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">형성평가 3문항 정답 분포</h3>
+          <div class="h-32 w-full relative">
+            <canvas id="scoresBarChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Submission Table Card -->
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+          <h3 class="text-lg font-black text-slate-800">학생 제출 원본 데이터 및 개별 첨삭 관리</h3>
+          <span class="text-xs bg-indigo-50 text-indigo-700 font-bold px-2.5 py-1 rounded-full border border-indigo-100/50">실시간 데이터 동기화 완료</span>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-xs font-bold uppercase">
+                <th class="p-4">이름 (학번)</th>
+                <th class="p-4">형성평가 점수</th>
+                <th class="p-4">제출 시간</th>
+                <th class="p-4 text-center">전송 상태</th>
+                <th class="p-4 text-right">피드백 작업</th>
+              </tr>
+            </thead>
+            <tbody id="student-tbody" class="divide-y divide-slate-100">
+              <tr>
+                <td colspan="5" class="p-8 text-center text-slate-400">데이터를 로드하는 중입니다...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- Custom Alert System -->
+  <div id="custom-modal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl border border-slate-100 animate-in zoom-in duration-200">
+      <div id="modal-icon" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4"></div>
+      <h3 id="modal-title" class="text-lg font-bold text-slate-900 mb-2"></h3>
+      <p id="modal-message" class="text-sm text-slate-500 mb-6"></p>
+      <button onclick="closeModal()" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors">확인</button>
+    </div>
+  </div>
+
+  <!-- Firestore Connection Code Module -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, onSnapshot, query, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // 1. Firebase Config (Must align with student environment)
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+      apiKey: "demo-key",
+      authDomain: "demo.firebaseapp.com",
+      projectId: "demo-project",
+      storageBucket: "demo.appspot.com",
+      messagingSenderId: "12345",
+      appId: "1:12345:web:12345"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'population-sim-app';
+
+    let allReports = [];
+    let barChartInstance = null;
+    let user = null;
+
+    // 2. Authentication and Initialization (Rule 3 Compliance)
+    const startAppSync = async () => {
+      try {
+        let credential;
+        // Always check for __initial_auth_token and prioritize custom token over anonymous (Rule 3 Guardrail)
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          credential = await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          credential = await signInAnonymously(auth);
+        }
+        user = credential.user;
+        console.log("Authenticated successfully on Teacher page:", user.uid);
+        setupRealtimeSync();
+      } catch (err) {
+        console.error("Firebase auth check failed on Teacher page", err);
+      }
+    };
+
+    // 3. Realtime Firestore Sync Listener (Rule 1 & 2 & 3 Compliance - Guarded Collection Listening)
+    const setupRealtimeSync = () => {
+      if (!user) return; // Guard logic to prevent unauthenticated database call
+      
+      const reportsRef = collection(db, 'artifacts', appId, 'public', 'data', 'reports');
+      
+      onSnapshot(reportsRef, (snapshot) => {
+        allReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderDashboardData();
+      }, (error) => {
+        console.error("Realtime fetch on Teacher page failed", error);
+      });
+    };
+
+    // 4. Verification Check
+    const loginForm = document.getElementById('login-form');
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const pwd = document.getElementById('password-input').value;
+      if (pwd === '5678') {
+        document.getElementById('login-container').classList.add('hidden');
+        document.getElementById('dashboard-container').classList.remove('hidden');
+        startAppSync(); // Only connect to firebase once the teacher is validated
+      } else {
+        const errorEl = document.getElementById('error-msg');
+        errorEl.classList.remove('hidden');
+        setTimeout(() => errorEl.classList.add('hidden'), 3000);
+      }
+    });
+
+    // 5. Build/Render Dashboard
+    const renderDashboardData = () => {
+      // Stats count
+      const currentCount = allReports.length;
+      document.getElementById('submitted-count').innerText = currentCount;
+      const pct = Math.min((currentCount / 25) * 100, 100);
+      document.getElementById('progress-bar').style.width = `${pct}%`;
+
+      // Render Charts for grade ranges
+      let dist = { '90점 이상 (A)': 0, '60점 ~ 80점 (B)': 0, '60점 미만 (C)': 0 };
+      allReports.forEach(r => {
+        if (r.score >= 90) dist['90점 이상 (A)']++;
+        else if (r.score >= 60) dist['60점 ~ 80점 (B)']++;
+        else dist['60점 미만 (C)']++;
+      });
+
+      const chartCtx = document.getElementById('scoresBarChart').getContext('2d');
+      if (barChartInstance) barChartInstance.destroy();
+
+      barChartInstance = new Chart(chartCtx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(dist),
+          datasets: [{
+            data: Object.values(dist),
+            backgroundColor: ['#10b981', '#6366f1', '#ef4444'],
+            borderRadius: 6,
+            maxBarThickness: 40
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { 
+              grid: { display: false },
+              ticks: { stepSize: 1, precision: 0 }
+            },
+            y: { grid: { display: false } }
+          }
+        }
+      });
+
+      // Render Table rows
+      const tbody = document.getElementById('student-tbody');
+      tbody.innerHTML = '';
+
+      if (allReports.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">제출된 보고서가 아직 존재하지 않습니다.</td></tr>`;
+        return;
+      }
+
+      // Sort in Javascript memory instead of server queries (Rule 2 Compliance)
+      const sortedReports = [...allReports].sort((a, b) => {
+        const tA = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
+        const tB = b.timestamp?.toDate ? b.timestamp.toDate() : new Date();
+        return tB - tA;
+      });
+
+      sortedReports.forEach(report => {
+        const isReviewed = report.status === 'reviewed';
+        const formattedDate = report.timestamp?.toDate 
+          ? report.timestamp.toDate().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) 
+          : '방금전';
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50/50 transition-colors";
+        tr.innerHTML = `
+          <td class="p-4 font-black text-slate-800">${report.studentName}</td>
+          <td class="p-4">
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${report.score >= 90 ? 'bg-green-100 text-green-800' : report.score >= 60 ? 'bg-indigo-100 text-indigo-800' : 'bg-red-100 text-red-800'}">
+              ${report.score}점
+            </span>
+          </td>
+          <td class="p-4 text-xs text-slate-500 font-medium">${formattedDate}</td>
+          <td class="p-4 text-center">
+            <span class="text-xs font-bold px-2 py-1 rounded-md ${isReviewed ? 'text-green-600 bg-green-50' : 'text-amber-500 bg-amber-50'}">
+              ${isReviewed ? '✓ 피드백완료' : '⏳ 첨삭대기'}
+            </span>
+          </td>
+          <td class="p-4 text-right">
+            <button onclick="toggleExpandRow('${report.id}')" class="text-indigo-600 hover:text-indigo-800 font-extrabold text-xs bg-indigo-50 hover:bg-indigo-100/70 px-3.5 py-2 rounded-lg transition-colors">
+              리뷰 / AI 피드백
+            </button>
+          </td>
+        `;
+
+        const expandTr = document.createElement('tr');
+        expandTr.id = `expand-row-${report.id}`;
+        expandTr.className = "hidden bg-slate-50/80 border-b border-indigo-100";
+        expandTr.innerHTML = `
+          <td colspan="5" class="p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- Student Essay Text -->
+              <div class="space-y-2">
+                <h4 class="text-xs font-extrabold text-slate-500 tracking-wider uppercase">학생이 서술한 미래모습 추론 및 인구 도시문제 해결안</h4>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 text-slate-700 leading-relaxed text-sm min-h-[140px] whitespace-pre-wrap">
+                  ${report.reportContent}
+                </div>
+              </div>
+
+              <!-- AI Editor / Workspace Custom -->
+              <div class="flex flex-col space-y-3">
+                <div class="flex justify-between items-center">
+                  <h4 class="text-xs font-extrabold text-slate-500 tracking-wider uppercase">교사 개별 평가 및 피드백 수정안</h4>
+                  <button onclick="runAiFeedback('${report.id}')" id="ai-btn-${report.id}" class="text-xs bg-purple-600 hover:bg-purple-700 text-white font-extrabold px-3 py-1.5 rounded-lg transition-colors flex items-center space-x-1">
+                    <span>✨ GAS AI 피드백 초안생성</span>
+                  </button>
+                </div>
+                <textarea 
+                  id="textarea-${report.id}" rows="5" 
+                  class="w-full p-4 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-indigo-300 outline-none leading-relaxed"
+                  placeholder="AI 피드백 버튼을 누르거나 직접 학생 개별 맞춤 조언을 기록해 주세요..."
+                >${report.teacherFeedback || ''}</textarea>
+                <div class="flex justify-end gap-2">
+                  <button onclick="submitFeedback('${report.id}')" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1">
+                    <span>💾 피드백 학생 전송</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+        tbody.appendChild(expandTr);
+      });
+    };
+
+    // 6. Inline Row Expander logic
+    window.toggleExpandRow = (id) => {
+      const el = document.getElementById(`expand-row-${id}`);
+      if (el.classList.contains('hidden')) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    };
+
+    // 7. GAS Integration - API Call logic
+    window.runAiFeedback = async (reportId) => {
+      const gasUrl = document.getElementById('gas-url-input').value.trim();
+      const targetTextarea = document.getElementById(`textarea-${reportId}`);
+      const btn = document.getElementById(`ai-btn-${reportId}`);
+
+      if (!gasUrl) {
+        showCustomModal('⚠️ GAS 배포 URL 공란', '상단의 [GAS 설정] 메뉴를 클릭해 등록된 구글 웹앱 URL 주소를 바르게 입력해주세요.', 'text-yellow-600 bg-yellow-100');
+        return;
+      }
+
+      const report = allReports.find(r => r.id === reportId);
+      if (!report) return;
+
+      btn.disabled = true;
+      btn.innerText = '🤖 AI 분석 및 작성 중...';
+      targetTextarea.value = '구글 웹앱을 통해 Gemini AI 피드백 초안을 받아오고 있습니다. 잠시만 기다려주세요...';
+
+      const systemPrompt = `
+        당신은 중학교 사회 과목 교사입니다. 학생이 '인구 변화와 도시 문제' 단원을 수강한 뒤 제출한 탐구 보고서에 대해
+        격려를 더하여 따뜻하고 객착적인 3~4문장의 개별 피드백 지도를 한국어로 작성해 주세요. 
+        학생의 학업 수준(형성평가 결과: ${report.score}점/100점)을 참고하여 인구 문제의 공간적 관점과 도시 문제의 연계성을 짚어줍니다.
+        
+        학생 이름: ${report.studentName}
+        학생 보고서: "${report.reportContent}"
+      `;
+
+      try {
+        // Run GAS Proxy post call
+        const response = await fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' }, // Avoid preflight CORS issues in some standard GAS deployments
+          body: JSON.stringify({ prompt: systemPrompt })
+        });
+
+        if (!response.ok) throw new Error("GAS Network failure response");
+        const resData = await response.json();
+        
+        if (resData.error) {
+          throw new Error(resData.error);
+        }
+
+        targetTextarea.value = resData.text || '';
+      } catch (err) {
+        console.error(err);
+        targetTextarea.value = "AI 피드백 연동에 지연이 발생했거나 실패했습니다.\n- 원인: GAS URL 주소 또는 GAS 내 등록된 Gemini API KEY가 정확한지 확인해 주세요.\n\n- [대체 교사 피드백]: " + report.studentName + " 학생, 탐구 활동에 적극적으로 임해주어 고마워요. 통계 수치에 따른 변화 구조를 공간적 측면에서 깊이 있고 성실하게 논하였습니다. 앞으로도 흥미를 잃지 않고 인구 정책에 관심을 이어가기를 기대합니다!";
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '✨ GAS AI 피드백 초안생성';
+      }
+    };
+
+    // 8. Submit Feedback directly to firestore
+    window.submitFeedback = async (reportId) => {
+      const feedbackVal = document.getElementById(`textarea-${reportId}`).value.trim();
+      if (!feedbackVal) {
+        showCustomModal('⚠️ 전송 실패', '보내실 첨삭 내용을 간략하게 기록한 후 전송해 주세요.', 'text-yellow-600 bg-yellow-100');
+        return;
+      }
+
+      if (!user) {
+        showCustomModal('⚠️ 전송 실패', '인증 세션이 유효하지 않습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.', 'text-red-600 bg-red-100');
+        return;
+      }
+
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'reports', reportId);
+        await updateDoc(docRef, {
+          teacherFeedback: feedbackVal,
+          status: 'reviewed'
+        });
+        showCustomModal('✓ 전송 완료', '학생의 실시간 피드백 탭에 즉시 연동 발행되었습니다.', 'text-green-600 bg-green-100');
+        toggleExpandRow(reportId);
+      } catch (err) {
+        console.error("Feedback Save Error", err);
+        showCustomModal('❌ 전송 오류', '데이터 변경 처리 권한 혹은 네트워크에 문제가 생겼습니다.', 'text-red-600 bg-red-100');
+      }
+    };
+
+    // 9. Local storage GAS settings backup
+    const gasUrlInput = document.getElementById('gas-url-input');
+    // Load existing
+    if(localStorage.getItem('gas_app_url_sim')) {
+      gasUrlInput.value = localStorage.getItem('gas_app_url_sim');
+    }
+    gasUrlInput.addEventListener('input', () => {
+      localStorage.setItem('gas_app_url_sim', gasUrlInput.value.trim());
+    });
+
+    window.toggleGasConfig = () => {
+      const configBox = document.getElementById('gas-config-box');
+      configBox.classList.toggle('hidden');
+    };
+
+    // 10. CSV Exporter
+    window.exportToCSV = () => {
+      const headers = ["이름(학번)", "형성평가 점수", "제출일시", "미래추론내용", "피드백상태", "교사피드백"];
+      const rows = allReports.map(r => [
+        r.studentName,
+        r.score,
+        r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString() : '방금전',
+        `"${r.reportContent.replace(/"/g, '""').replace(/\n/g, ' ')}"`,
+        r.status === 'reviewed' ? '피드백완료' : '첨삭대기',
+        `"${(r.teacherFeedback || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`
+      ]);
+
+      const csvContent = "data:text/csv;charset=utf-8,\uFEFF"
+        + headers.join(",") + "\n"
+        + rows.map(e => e.join(",")).join("\n");
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `중등사회_인구변화_탐구보고서_${new Date().toLocaleDateString()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    // Helper alerts
+    const customModal = document.getElementById('custom-modal');
+    window.showCustomModal = (title, message, iconClass) => {
+      document.getElementById('modal-title').innerText = title;
+      document.getElementById('modal-message').innerText = message;
+      const iconEl = document.getElementById('modal-icon');
+      iconEl.className = `mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 ${iconClass}`;
+      iconEl.innerHTML = iconClass.includes('red') ? '✕' : (iconClass.includes('green') ? '✓' : 'ℹ');
+      customModal.classList.remove('hidden');
+    };
+
+    window.closeModal = () => {
+      customModal.classList.add('hidden');
+    };
+
+  </script>
+</body>
+</html>
